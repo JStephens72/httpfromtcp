@@ -5,42 +5,75 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
+	"net"
 	"strings"
 )
 
-const inputFilePath = "messages.txt"
+const listenerPort = ":42069"
 
 func main() {
-	f, err := os.Open(inputFilePath)
+	listener, err := net.Listen("tcp", listenerPort)
 	if err != nil {
-		log.Fatalf("could not open %s: %s\n", inputFilePath, err)
+		log.Fatalf("err listening for TCP traffic: %s\n", err.Error())
 	}
-	defer f.Close()
+	defer listener.Close()
 
-	fmt.Printf("Reading data from %s\n", inputFilePath)
-	fmt.Println("======================================")
+	fmt.Printf("Server listening on %s", listenerPort)
 
-	currentLineContents := ""
 	for {
-		buffer := make([]byte, 8)
-		n, err := f.Read(buffer)
+		conn, err := listener.Accept()
 		if err != nil {
-			if currentLineContents != "" {
-				fmt.Printf("read: %s\n", currentLineContents)
-			}
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			fmt.Printf("error: %s\n", err.Error())
-			break
+			log.Fatalf("Connection accept error: %v", err.Error())
 		}
-		str := string(buffer[:n])
-		parts := strings.Split(str, "\n")
-		for i := 0; i < len(parts)-1; i++ {
-			fmt.Printf("read: %s%s\n", currentLineContents, parts[i])
-			currentLineContents = ""
+		log.Printf("Accepted connection from %s", conn.RemoteAddr().String())
+
+		linesChan := getLinesChannel(conn)
+
+		for line := range linesChan {
+			fmt.Printf("read: %s\n", line)
 		}
-		currentLineContents += parts[len(parts)-1]
+		fmt.Println("Connection to ", conn.RemoteAddr().String(), " closed")
 	}
+}
+
+// getLinesChannel reads from f in a goroutine and returns a channel of lines.
+func getLinesChannel(f io.ReadCloser) <-chan string {
+	out := make(chan string)
+
+	go func() {
+		defer f.Close()
+		defer close(out)
+
+		currentLineContents := ""
+
+		for {
+			buffer := make([]byte, 8)
+			n, err := f.Read(buffer)
+			if err != nil {
+				// Emit any remaining partial line before exiting
+				if currentLineContents != "" {
+					out <- currentLineContents
+				}
+				if errors.Is(err, io.EOF) {
+					return
+				}
+				// For non-EOF errors, we still stop reading
+				return
+			}
+
+			str := string(buffer[:n])
+			parts := strings.Split(str, "\n")
+
+			// Emit all complete lines
+			for i := 0; i < len(parts)-1; i++ {
+				out <- currentLineContents + parts[i]
+				currentLineContents = ""
+			}
+
+			// Last part is either a full line fragment or empty
+			currentLineContents += parts[len(parts)-1]
+		}
+	}()
+
+	return out
 }
