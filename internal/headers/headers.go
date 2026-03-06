@@ -8,10 +8,16 @@ import (
 
 const CRLF = "\r\n"
 
+var allowed [256]bool
+
 type Headers map[string]string
 
 func NewHeaders() Headers {
 	return make(Headers)
+}
+
+func init() {
+	allowed = initValidChars()
 }
 
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
@@ -23,20 +29,55 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 		// headers are done, consume the CRLF
 		return 2, true, nil
 	}
-	parts := bytes.SplitN(data[:idx], []byte(":"), 2)
-	fieldName := string(parts[0])
 
-	if fieldName != strings.TrimRight(fieldName, " ") {
-		return 0, false, fmt.Errorf("invalid header name: '%s'", fieldName)
+	parts := bytes.SplitN(data[:idx], []byte(":"), 2)
+	key := strings.ToLower(string(parts[0]))
+
+	value := bytes.TrimSpace(parts[1])
+	key = strings.TrimLeft(key, " ")
+
+	if !isValid(key) {
+		return 0, false, fmt.Errorf("invalid field name: '%s'", key)
 	}
 
-	fieldValue := bytes.TrimSpace(parts[1])
-	fieldName = strings.TrimSpace(fieldName)
+	fmt.Printf("'%v'\n", key)
 
-	h.Set(fieldName, string(fieldValue))
+	h.Set(key, string(value))
 	return idx + 2, false, nil
 }
 
 func (h Headers) Set(key, value string) {
 	h[key] = value
+}
+
+func initValidChars() [256]bool {
+	for b := byte('a'); b <= byte('z'); b++ {
+		allowed[b] = true
+	}
+	for b := byte('0'); b <= byte('9'); b++ {
+		allowed[b] = true
+	}
+	specials := "!#$%&'*+-.^_`|~"
+	for i := 0; i < len(specials); i++ {
+		allowed[specials[i]] = true
+	}
+	return allowed
+}
+
+func isValid(s string) bool {
+	return !(hasTrailingSpaces(s) || containsInvalidChars(s))
+}
+
+func hasTrailingSpaces(s string) bool {
+
+	return len(s) > 0 && len(strings.TrimRight(s, " ")) < len(s)
+}
+
+func containsInvalidChars(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if !allowed[s[i]] {
+			return true
+		}
+	}
+	return false
 }
