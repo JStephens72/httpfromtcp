@@ -57,6 +57,14 @@ func (h Headers) Set(key, value string) {
 	h[key] = value
 }
 
+func (h Headers) Get(key string) string {
+	key = strings.ToLower(key)
+	if _, exists := h[key]; exists {
+		return h[key]
+	}
+	return ""
+}
+
 func initValidChars() [256]bool {
 	for b := byte('a'); b <= byte('z'); b++ {
 		allowed[b] = true

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/JStephen72/httpfromtcp/internal/headers"
@@ -13,6 +14,7 @@ import (
 type Request struct {
 	RequestLine RequestLine
 	Headers     headers.Headers
+	Body        []byte
 	state       requestState
 }
 
@@ -28,6 +30,7 @@ const (
 	requestStateInitialized requestState = iota
 	requestStateDone
 	requestStateParsingHeaders
+	requestStateParsingBody
 )
 
 const CRLF = "\r\n"
@@ -68,9 +71,26 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 			return 0, err
 		}
 		if done {
-			r.state = requestStateDone
+			r.state = requestStateParsingBody
 		}
 		return bytesConsumed, nil
+
+	case requestStateParsingBody:
+		contentLength, err := strconv.Atoi(r.Headers.Get("content-length"))
+		if err != nil {
+			// contentLength is an empty string, thus, not set
+			r.state = requestStateDone
+			return 0, nil
+		}
+		r.Body = append(r.Body, data...)
+		if len(r.Body) > contentLength {
+			return 0, fmt.Errorf("error: message data is larger than specified Content-Length")
+		}
+		if len(r.Body) == contentLength {
+			r.state = requestStateDone
+			return len(data), nil
+		}
+		return len(data), nil
 
 	case requestStateDone:
 		return 0, fmt.Errorf("error: trying to read data in a Done state")
