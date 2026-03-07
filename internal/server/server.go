@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/JStephen72/httpfromtcp/internal/request"
+	"github.com/JStephen72/httpfromtcp/internal/response"
 )
 
 type Server struct {
@@ -87,18 +88,16 @@ func (s *Server) handle(conn net.Conn) {
 	}
 
 	// build a simple response
-	body := []byte("Hello World!\n")
+	body := []byte("")
 
-	response := fmt.Sprintf(
-		"HTTP/1.1 200 OK\r\n"+
-			"Content-Type: text/plain\r\n"+
-			"Content-Length: %d\r\n"+
-			"\r\n",
-		len(body),
-	)
+	responseHeaders := response.GetDefaultHeaders(len(body))
 
-	if _, err := conn.Write([]byte(response)); err != nil {
-		log.Printf("write error: %v\n", err)
+	if err = response.WriteStatusLine(conn, response.STATUS_OK); err != nil {
+		log.Printf("error sending reponse status-line: %v\n", err)
+		return
+	}
+	if err = response.WriteHeaders(conn, responseHeaders); err != nil {
+		log.Printf("error sending response headers: %v\n", err)
 		return
 	}
 
