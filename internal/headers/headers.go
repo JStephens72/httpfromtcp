@@ -40,8 +40,6 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 		return 0, false, fmt.Errorf("invalid field name: '%s'", key)
 	}
 
-	fmt.Printf("'%v'\n", key)
-
 	h.Set(key, string(value))
 	return idx + 2, false, nil
 }
