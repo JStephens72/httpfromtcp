@@ -68,6 +68,11 @@ func (h Headers) Get(key string) string {
 	return ""
 }
 
+func (h Headers) Remove(key string) {
+	key = strings.ToLower(key)
+	delete(h, key)
+}
+
 func initValidChars() [256]bool {
 	for b := byte('a'); b <= byte('z'); b++ {
 		allowed[b] = true
