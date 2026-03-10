@@ -44,7 +44,7 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	return idx + 2, false, nil
 }
 
-func (h Headers) Set(key, value string) {
+func (h Headers) Add(key, value string) {
 	key = strings.ToLower(key)
 	if v, exists := h[key]; exists {
 		value = strings.Join([]string{
@@ -52,6 +52,11 @@ func (h Headers) Set(key, value string) {
 			value,
 		}, ", ")
 	}
+	h[key] = value
+}
+
+func (h Headers) Set(key, value string) {
+	key = strings.ToLower(key)
 	h[key] = value
 }
 

@@ -36,7 +36,7 @@ func TestHeadersParse(t *testing.T) {
 	require.NotNil(t, headers)
 	assert.Equal(t, "localhost:42069", headers["host"])
 	assert.Equal(t, "curl/7.81.0", headers["user-agent"])
-	assert.Equal(t, n, 25)
+	assert.Equal(t, 25, n)
 	assert.False(t, done)
 
 	// Test: Valid done
@@ -57,9 +57,9 @@ func TestHeadersParse(t *testing.T) {
 	assert.Equal(t, 0, n)
 	assert.False(t, done)
 
-	// Test: Invalid characters header
+	// Test: Invalid character header
 	headers = NewHeaders()
-	data = []byte("H@st: localhost:42069\r\n\r\n")
+	data = []byte("H©st: localhost:42069\r\n\r\n")
 	n, done, err = headers.Parse(data)
 	require.Error(t, err)
 	assert.Equal(t, 0, n)

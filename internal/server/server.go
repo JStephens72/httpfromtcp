@@ -10,54 +10,35 @@ import (
 	"github.com/JStephen72/httpfromtcp/internal/response"
 )
 
+type Handler func(w *response.Writer, req *request.Request)
+
+// Server is an HTTP 1.1 server
 type Server struct {
+	handler  Handler
 	listener net.Listener
 	closed   atomic.Bool
 }
 
-func New(port int) (*Server, error) {
-	addr := fmt.Sprintf(":%d", port)
-
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return nil, fmt.Errorf("error listening on %s: %w", addr, err)
-	}
-
-	log.Printf("Server listening on %s\n", addr)
-
-	return &Server{
-		listener: listener,
-	}, nil
-}
-
-func (s *Server) Start() error {
-	for {
-		conn, err := s.listener.Accept()
-		if err != nil {
-			return fmt.Errorf("accept error: %w", err)
-		}
-
-		log.Printf("Accepted connection from %s", conn.RemoteAddr().String())
-
-		go s.handle(conn)
-	}
-}
-
-func (s *Server) Serve(port int) (*Server, error) {
-	addr := fmt.Sprintf(":%d", port)
-
-	listener, err := net.Listen("tcp", addr)
+func Serve(port int, handler Handler) (*Server, error) {
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return nil, err
 	}
 
-	s = &Server{
+	s := &Server{
+		handler:  handler,
 		listener: listener,
 	}
-
 	go s.listen()
 	return s, nil
+}
 
+func (s *Server) Close() error {
+	s.closed.Store(true)
+	if s.listener != nil {
+		return s.listener.Close()
+	}
+	return nil
 }
 
 func (s *Server) listen() {
@@ -74,35 +55,16 @@ func (s *Server) listen() {
 	}
 }
 
-func (s *Server) Close() error {
-	return s.listener.Close()
-}
-
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
-
-	_, err := request.RequestFromReader(conn)
+	w := response.NewWriter(conn)
+	req, err := request.RequestFromReader(conn)
 	if err != nil {
-		log.Printf("Invalid request: %s", err.Error())
+		w.WriteStatusLine(response.StatusCodeBadRequest)
+		body := []byte(fmt.Sprintf("Error parsing request: %v", err))
+		w.WriteHeaders(response.GetDefaultHeaders(len(body)))
+		w.WriteBody(body)
 		return
 	}
-
-	// build a simple response
-	body := []byte("")
-
-	responseHeaders := response.GetDefaultHeaders(len(body))
-
-	if err = response.WriteStatusLine(conn, response.STATUS_OK); err != nil {
-		log.Printf("error sending reponse status-line: %v\n", err)
-		return
-	}
-	if err = response.WriteHeaders(conn, responseHeaders); err != nil {
-		log.Printf("error sending response headers: %v\n", err)
-		return
-	}
-
-	if _, err := conn.Write(body); err != nil {
-		log.Printf("write error: %v\n", err)
-		return
-	}
+	s.handler(w, req)
 }
